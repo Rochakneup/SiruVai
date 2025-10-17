@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Upload, Calendar, FileText, User, Package, AlertCircle, CheckCircle, X, ShoppingCart, Search } from 'lucide-react';
+import { Upload, Calendar, FileText, User, Package, AlertCircle, CheckCircle, X, ShoppingCart, Search, Filter } from 'lucide-react';
 
 const WarrantyManagement = () => {
   const [warranties, setWarranties] = useState([]);
@@ -12,6 +12,8 @@ const WarrantyManagement = () => {
   const [success, setSuccess] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [imagePreview, setImagePreview] = useState(null);
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [customerSearchQuery, setCustomerSearchQuery] = useState('');
 
   const [formData, setFormData] = useState({
     sale_item_id: '',
@@ -98,7 +100,6 @@ const WarrantyManagement = () => {
     }
   };
 
-  // Flatten sale items for dropdown
   const flattenSalesItems = () => {
     const items = [];
     sales.forEach(sale => {
@@ -224,9 +225,9 @@ const WarrantyManagement = () => {
     const today = new Date();
     const end = new Date(endDate);
     const daysLeft = Math.ceil((end - today) / (1000 * 60 * 60 * 24));
-    if (daysLeft < 0) return { status: 'Expired', color: 'text-red-600', bgColor: 'bg-red-100' };
-    if (daysLeft <= 30) return { status: 'Expiring Soon', color: 'text-orange-600', bgColor: 'bg-orange-100' };
-    return { status: 'Active', color: 'text-green-600', bgColor: 'bg-green-100' };
+    if (daysLeft < 0) return { status: 'Expired', color: 'text-red-600', bgColor: 'bg-red-100', filterValue: 'expired' };
+    if (daysLeft <= 30) return { status: 'Expiring Soon', color: 'text-orange-600', bgColor: 'bg-orange-100', filterValue: 'expiring' };
+    return { status: 'Active', color: 'text-green-600', bgColor: 'bg-green-100', filterValue: 'active' };
   };
 
   const getCustomerName = (id) => {
@@ -255,6 +256,17 @@ const WarrantyManagement = () => {
       )
     : [];
 
+  // Filter warranties by status and customer name
+  const filteredWarranties = warranties.filter(warranty => {
+    const status = getWarrantyStatus(warranty.warranty_end_date);
+    const matchesStatus = statusFilter === 'all' || status.filterValue === statusFilter;
+    
+    const customerName = getCustomerName(warranty.customer_id).toLowerCase();
+    const matchesCustomer = customerName.includes(customerSearchQuery.toLowerCase());
+    
+    return matchesStatus && matchesCustomer;
+  });
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4">
       <div className="max-w-7xl mx-auto">
@@ -263,7 +275,7 @@ const WarrantyManagement = () => {
           <div>
             <h1 className="text-3xl font-bold text-slate-800 flex items-center gap-3">
               <FileText className="text-blue-600" size={32} />
-               Add Warranty Cards
+              Add Warranty Cards
             </h1>
           </div>
           <button
@@ -481,21 +493,73 @@ const WarrantyManagement = () => {
 
         {/* Warranty Cards Display */}
         <div className="bg-white rounded-xl shadow-lg p-6">
-          <h2 className="text-2xl font-bold text-slate-800 mb-6"> List of Warranty Cards</h2>
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+            <h2 className="text-2xl font-bold text-slate-800">List of Warranty Cards</h2>
+            
+            {/* Filters */}
+            <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+              {/* Customer Search */}
+              <div className="relative flex-1 sm:flex-initial">
+                <Search className="absolute left-3 top-3 text-slate-400" size={18} />
+                <input
+                  type="text"
+                  value={customerSearchQuery}
+                  onChange={(e) => setCustomerSearchQuery(e.target.value)}
+                  placeholder="Search by customer name..."
+                  className="w-full sm:w-64 pl-10 pr-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              {/* Status Filter */}
+              <div className="relative flex-1 sm:flex-initial">
+                <Filter className="absolute left-3 top-3 text-slate-400" size={18} />
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="w-full sm:w-48 pl-10 pr-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white"
+                >
+                  <option value="all">All Status</option>
+                  <option value="active">Active</option>
+                  <option value="expiring">Expiring Soon</option>
+                  <option value="expired">Expired</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Results count */}
+          <div className="mb-4 text-sm text-slate-600">
+            Showing {filteredWarranties.length} of {warranties.length} warranty cards
+          </div>
           
           {loading && !warranties.length ? (
             <div className="text-center py-12">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
               <p className="text-slate-600 mt-4">Loading warranties...</p>
             </div>
-          ) : warranties.length === 0 ? (
+          ) : filteredWarranties.length === 0 ? (
             <div className="text-center py-12">
               <FileText className="mx-auto text-slate-300" size={64} />
-              <p className="text-slate-600 mt-4">No warranty cards found</p>
+              <p className="text-slate-600 mt-4">
+                {warranties.length === 0 
+                  ? 'No warranty cards found' 
+                  : 'No warranty cards match your filters'}
+              </p>
+              {(statusFilter !== 'all' || customerSearchQuery) && (
+                <button
+                  onClick={() => {
+                    setStatusFilter('all');
+                    setCustomerSearchQuery('');
+                  }}
+                  className="mt-4 px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors"
+                >
+                  Clear Filters
+                </button>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {warranties.map((warranty) => {
+              {filteredWarranties.map((warranty) => {
                 const status = getWarrantyStatus(warranty.warranty_end_date);
                 return (
                   <div key={warranty.warranty_id} className="border border-slate-200 rounded-lg p-4 hover:shadow-lg transition-shadow bg-white">
@@ -518,7 +582,7 @@ const WarrantyManagement = () => {
                     <div className="space-y-2 text-sm">
                       <div className="flex items-center gap-2 text-slate-700">
                         <User size={16} className="text-slate-400 flex-shrink-0" />
-                        <span className="truncate">{getCustomerName(warranty.customer_id)}</span>
+                        <span className="truncate font-medium">{getCustomerName(warranty.customer_id)}</span>
                       </div>
                       <div className="flex items-center gap-2 text-slate-700">
                         <Package size={16} className="text-slate-400 flex-shrink-0" />

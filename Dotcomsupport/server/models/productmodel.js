@@ -20,4 +20,3 @@ export const getProducts = async () => {
   );
   return result.rows;
 };
-

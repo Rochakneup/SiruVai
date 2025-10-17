@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import * as XLSX from 'xlsx';
 
 const SALES_ADD_URL = "http://localhost:5000/siruvai/sales/add";
 const SALES_URL = "http://localhost:5000/siruvai/sales";
@@ -175,6 +176,81 @@ const SalesComponent = () => {
     return `₹${parseFloat(amount).toFixed(2)}`;
   };
 
+  const getFilteredSales = () => {
+    return sales.filter((sale) => {
+      const saleDate = new Date(sale.sale_date);
+      const startDate = salesFilter.start ? new Date(salesFilter.start) : null;
+      const endDate = salesFilter.end ? new Date(salesFilter.end) : null;
+      if (startDate && saleDate < startDate) return false;
+      if (endDate && saleDate > endDate) return false;
+      return true;
+    });
+  };
+
+  const exportToExcel = () => {
+    const filteredSales = getFilteredSales();
+    
+    if (filteredSales.length === 0) {
+      alert("No sales data to export!");
+      return;
+    }
+
+    // Create summary sheet
+    const summaryData = filteredSales.map((sale) => ({
+      "Bill No": sale.bill_no,
+      "Date": formatDate(sale.sale_date),
+      "Customer": sale.customer_name,
+      "Total Amount": parseFloat(sale.total_amount).toFixed(2),
+      "Items Count": sale.items ? sale.items.length : 0
+    }));
+
+    // Create detailed sheet with all items
+    const detailedData = [];
+    filteredSales.forEach((sale) => {
+      if (sale.items && Array.isArray(sale.items)) {
+        sale.items.forEach((item) => {
+          detailedData.push({
+            "Bill No": sale.bill_no,
+            "Date": formatDate(sale.sale_date),
+            "Customer": sale.customer_name,
+            "Product": item.product_name || `Product #${item.product_id}`,
+            "Quantity": item.quantity,
+            "Unit Price": parseFloat(item.unit_price).toFixed(2),
+            "Subtotal": (item.quantity * item.unit_price).toFixed(2),
+            "Sale Total": parseFloat(sale.total_amount).toFixed(2)
+          });
+        });
+      }
+    });
+
+    // Create workbook
+    const wb = XLSX.utils.book_new();
+    
+    // Add summary sheet
+    const wsSummary = XLSX.utils.json_to_sheet(summaryData);
+    XLSX.utils.book_append_sheet(wb, wsSummary, "Sales Summary");
+    
+    // Add detailed sheet
+    if (detailedData.length > 0) {
+      const wsDetailed = XLSX.utils.json_to_sheet(detailedData);
+      XLSX.utils.book_append_sheet(wb, wsDetailed, "Sales Details");
+    }
+
+    // Generate filename with date range
+    let filename = "Sales_Export";
+    if (salesFilter.start && salesFilter.end) {
+      filename += `_${salesFilter.start}_to_${salesFilter.end}`;
+    } else if (salesFilter.start) {
+      filename += `_from_${salesFilter.start}`;
+    } else if (salesFilter.end) {
+      filename += `_until_${salesFilter.end}`;
+    }
+    filename += ".xlsx";
+
+    // Save file
+    XLSX.writeFile(wb, filename);
+  };
+
   return (
     <div className="max-w-6xl mx-auto p-4">
       <h1 className="text-3xl font-bold mb-6 text-gray-800">Sales Management</h1>
@@ -204,7 +280,6 @@ const SalesComponent = () => {
 
       {activeTab === "add" && (
         <div className="bg-white rounded-lg shadow-md p-6">
-          {/* Add Sale Form */}
           <div className="flex flex-col gap-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
@@ -350,15 +425,25 @@ const SalesComponent = () => {
         <div className="bg-white rounded-lg shadow-md p-6">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-semibold">Sales History</h2>
-            <button
-              onClick={fetchSales}
-              className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded transition-colors"
-            >
-              Refresh
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={exportToExcel}
+                className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded transition-colors flex items-center gap-2"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Export to Excel
+              </button>
+              <button
+                onClick={fetchSales}
+                className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded transition-colors"
+              >
+                Refresh
+              </button>
+            </div>
           </div>
 
-          {/* Date Filter */}
           <div className="flex gap-4 mb-4 items-center">
             <div>
               <label className="text-sm font-medium">Start Date:</label>
@@ -398,79 +483,70 @@ const SalesComponent = () => {
             </div>
           ) : (
             <div className="space-y-3">
-              {sales
-                .filter((sale) => {
-                  const saleDate = new Date(sale.sale_date);
-                  const startDate = salesFilter.start ? new Date(salesFilter.start) : null;
-                  const endDate = salesFilter.end ? new Date(salesFilter.end) : null;
-                  if (startDate && saleDate < startDate) return false;
-                  if (endDate && saleDate > endDate) return false;
-                  return true;
-                })
-                .map((sale) => (
-                  <div key={sale.sale_id} className="border rounded-lg overflow-hidden">
-                    <div
-                      className="bg-gray-50 p-4 cursor-pointer hover:bg-gray-100 transition-colors"
-                      onClick={() => toggleExpandSale(sale.sale_id)}
-                    >
-                      <div className="flex justify-between items-center">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-4">
-                            <span className="font-semibold text-lg">{sale.bill_no}</span>
-                            <span className="text-gray-600">{formatDate(sale.sale_date)}</span>
-                            <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm">
-                              {sale.customer_name}
-                            </span>
-                          </div>
-                        </div>
+              {getFilteredSales().map((sale) => (
+                <div key={sale.sale_id} className="border rounded-lg overflow-hidden">
+                  <div
+                    className="bg-gray-50 p-4 cursor-pointer hover:bg-gray-100 transition-colors"
+                    onClick={() => toggleExpandSale(sale.sale_id)}
+                  >
+                    <div className="flex justify-between items-center">
+                      <div className="flex-1">
                         <div className="flex items-center gap-4">
-                          <span className="font-bold text-xl text-green-600">
-                            {formatCurrency(sale.total_amount)}
-                          </span>
-                          <span className="text-gray-400">
-                            {expandedSale === sale.sale_id ? "▲" : "▼"}
+                          <span className="font-semibold text-lg">{sale.bill_no}</span>
+                          <span className="text-gray-600">{formatDate(sale.sale_date)}</span>
+                          <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm">
+                            {sale.customer_name}
                           </span>
                         </div>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <span className="font-bold text-xl text-green-600">
+                          {formatCurrency(sale.total_amount)}
+                        </span>
+                        <span className="text-gray-400">
+                          {expandedSale === sale.sale_id ? "▲" : "▼"}
+                        </span>
                       </div>
                     </div>
+                  </div>
 
-                    {expandedSale === sale.sale_id && sale.items && Array.isArray(sale.items) && sale.items.length > 0 && (
-                      <div className="p-4 bg-white border-t">
-                        <h4 className="font-semibold mb-3">Items:</h4>
-                        <table className="w-full">
-                          <thead>
-                            <tr className="bg-gray-100">
-                              <th className="text-left p-2">Product</th>
-                              <th className="text-right p-2">Quantity</th>
-                              <th className="text-right p-2">Unit Price</th>
-                              <th className="text-right p-2">Subtotal</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {sale.items.map((item, idx) => (
-                              <tr key={idx} className="border-b">
-                                <td className="p-2">{item.product_name || `Product #${item.product_id}`}</td>
-                                <td className="p-2 text-right">{item.quantity}</td>
-                                <td className="p-2 text-right">{formatCurrency(item.unit_price)}</td>
-                                <td className="p-2 text-right font-semibold">
-                                  {formatCurrency(item.quantity * item.unit_price)}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                          <tfoot>
-                            <tr className="bg-gray-50 font-bold">
-                              <td colSpan="3" className="p-2 text-right">Total:</td>
-                              <td className="p-2 text-right text-green-600">
-                                {formatCurrency(sale.total_amount)}
+                  {expandedSale === sale.sale_id && sale.items && Array.isArray(sale.items) && sale.items.length > 0 && (
+                    <div className="p-4 bg-white border-t">
+                      <h4 className="font-semibold mb-3">Items:</h4>
+                      <table className="w-full">
+                        <thead>
+                          <tr className="bg-gray-100">
+                            <th className="text-left p-2">Product</th>
+                            <th className="text-right p-2">Quantity</th>
+                            <th className="text-right p-2">Unit Price</th>
+                            <th className="text-right p-2">Subtotal</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {sale.items.map((item, idx) => (
+                            <tr key={idx} className="border-b">
+                              <td className="p-2">{item.product_name || `Product #${item.product_id}`}</td>
+                              <td className="p-2 text-right">{item.quantity}</td>
+                              <td className="p-2 text-right">{formatCurrency(item.unit_price)}</td>
+                              <td className="p-2 text-right font-semibold">
+                                {formatCurrency(item.quantity * item.unit_price)}
                               </td>
                             </tr>
-                          </tfoot>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-                ))}
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="bg-gray-50 font-bold">
+                            <td colSpan="3" className="p-2 text-right">Total:</td>
+                            <td className="p-2 text-right text-green-600">
+                              {formatCurrency(sale.total_amount)}
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           )}
         </div>

@@ -32,20 +32,25 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
 
   // Fetch APIs
+  // Fetch APIs
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [usersRes, salesRes, productsRes, ticketsRes] = await Promise.all([
+      const [usersRes, salesRes, productsRes, ticketsRes, customersRes] = await Promise.all([
         fetch("http://localhost:5000/siruvai/users"),
         fetch("http://localhost:5000/siruvai/sales"),
         fetch("http://localhost:5000/siruvai/products"),
-        fetch("http://localhost:5000/siruvai/support/view")
+        fetch("http://localhost:5000/siruvai/support/view"),
+        fetch("http://localhost:5000/siruvai/customers")
       ]);
 
       const users = await usersRes.json();
       const sales = await salesRes.json();
       const products = await productsRes.json();
       const tickets = await ticketsRes.json();
+      const customers = await customersRes.json();
+
+      console.log("API Responses:", { users, sales, products, tickets, customers });
 
       // Calculate total revenue
       let totalRevenue = 0;
@@ -68,7 +73,7 @@ const Dashboard = () => {
         products: Array.isArray(products) ? products.length : 0,
         tickets: Array.isArray(tickets) ? tickets.length : 0,
         revenue: totalRevenue,
-        customers: Array.isArray(users) ? users.filter(u => u.role === 'customer').length : 0
+        customers: Array.isArray(customers) ? customers.length : 0
       });
 
       // Aggregate sales by date

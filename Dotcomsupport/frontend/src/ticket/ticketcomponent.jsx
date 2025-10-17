@@ -16,6 +16,7 @@ const TicketsManager = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [editingTicketId, setEditingTicketId] = useState(null);
+  const [statusFilter, setStatusFilter] = useState("all");
 
   const [formData, setFormData] = useState({
     customer_id: "",
@@ -26,7 +27,7 @@ const TicketsManager = () => {
     issue_description: "",
     status: "open",
     priority: "medium",
-    response_text: "", // ✅ new dynamic field
+    response_text: "",
   });
 
   // Fetch everything
@@ -88,7 +89,7 @@ const TicketsManager = () => {
       issue_description: "",
       status: "open",
       priority: "medium",
-      response_text: "", // ✅ reset too
+      response_text: "",
     });
 
   const handleEdit = (ticket) => {
@@ -102,7 +103,7 @@ const TicketsManager = () => {
       issue_description: ticket.issue_description,
       status: ticket.status,
       priority: ticket.priority,
-      response_text: ticket.response_text || "", // ✅ load value
+      response_text: ticket.response_text || "",
     });
   };
 
@@ -112,6 +113,63 @@ const TicketsManager = () => {
     setTickets((prev) => prev.filter((t) => t.ticket_id !== id));
   };
 
+  // Filter tickets by status
+  const filteredTickets = statusFilter === "all" 
+    ? tickets 
+    : tickets.filter(t => t.status === statusFilter);
+
+  // Export to Excel (CSV format)
+  const exportToExcel = () => {
+    const headers = [
+      "Ticket No",
+      "Customer",
+      "Product",
+      "Sale",
+      "Issue Title",
+      "Issue Description",
+      "Response",
+      "Status",
+      "Priority",
+      "Assigned To",
+      "Created At"
+    ];
+
+    const rows = filteredTickets.map(t => [
+      t.ticket_no || "",
+      t.customer_name || t.customer_id || "",
+      t.product_name || t.product_id || "",
+      t.bill_no || t.sale_id || "",
+      t.issue_title || "",
+      t.issue_description || "",
+      t.response_text || "",
+      t.status || "",
+      t.priority || "",
+      t.assigned_to 
+        ? users.find((u) => u.user_id === t.assigned_to)?.full_name || "Unknown"
+        : "Unassigned",
+      t.created_at ? new Date(t.created_at).toLocaleString() : ""
+    ]);
+
+    // Create CSV content
+    const csvContent = [
+      headers.join(","),
+      ...rows.map(row => 
+        row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(",")
+      )
+    ].join("\n");
+
+    // Create download link
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `tickets_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   if (loading) return <div className="p-4">Loading data...</div>;
   if (error) return <div className="p-4 text-red-500">{error}</div>;
 
@@ -119,8 +177,120 @@ const TicketsManager = () => {
     <div className="container mx-auto p-4">
       <h1 className="text-2xl font-bold mb-4">Support Tickets</h1>
 
-      {/* ✅ Ticket Form */}
-      <form onSubmit={handleSubmit} className="mb-6 p-4 border rounded shadow space-y-2 bg-white">
+      {/* Tickets Table - Now at Top */}
+      <div className="mb-6 bg-white rounded shadow">
+        {/* Filter and Export Controls */}
+        <div className="p-4 border-b flex justify-between items-center">
+          <div className="flex items-center space-x-2">
+            <label className="font-medium">Filter by Status:</label>
+            <select 
+              value={statusFilter} 
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="border p-2 rounded"
+            >
+              <option value="all">All Tickets</option>
+              <option value="open">Open</option>
+              <option value="in_progress">In Progress</option>
+              <option value="resolved">Resolved</option>
+              <option value="closed">Closed</option>
+            </select>
+            <span className="text-gray-600 ml-4">
+              Showing {filteredTickets.length} of {tickets.length} tickets
+            </span>
+          </div>
+          <button 
+            onClick={exportToExcel}
+            className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 flex items-center space-x-2"
+          >
+            <span>📊</span>
+            <span>Export to Excel</span>
+          </button>
+        </div>
+
+        {/* Table */}
+        <div className="overflow-x-auto">
+          <table className="table-auto w-full border-collapse border">
+            <thead className="bg-gray-100">
+              <tr>
+                <th className="border p-2">Ticket No</th>
+                <th className="border p-2">Customer</th>
+                <th className="border p-2">Product</th>
+                <th className="border p-2">Sale</th>
+                <th className="border p-2">Issue</th>
+                <th className="border p-2">Response</th>
+                <th className="border p-2">Status</th>
+                <th className="border p-2">Priority</th>
+                <th className="border p-2">Assigned To</th>
+                <th className="border p-2">Created</th>
+                <th className="border p-2">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredTickets.length === 0 ? (
+                <tr>
+                  <td colSpan="11" className="text-center text-gray-500 p-4">
+                    {statusFilter === "all" 
+                      ? "No tickets yet." 
+                      : `No ${statusFilter.replace('_', ' ')} tickets.`}
+                  </td>
+                </tr>
+              ) : (
+                filteredTickets.map((t) => (
+                  <tr key={t.ticket_id}>
+                    <td className="border p-2">{t.ticket_no}</td>
+                    <td className="border p-2">{t.customer_name || t.customer_id}</td>
+                    <td className="border p-2">{t.product_name || t.product_id}</td>
+                    <td className="border p-2">{t.bill_no || t.sale_id}</td>
+                    <td className="border p-2">{t.issue_title}</td>
+                    <td className="border p-2 text-gray-700">
+                      {t.response_text || <span className="italic text-gray-400">—</span>}
+                    </td>
+                    <td className="border p-2">
+                      <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                        t.status === 'open' ? 'bg-blue-100 text-blue-800' :
+                        t.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800' :
+                        t.status === 'resolved' ? 'bg-green-100 text-green-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {t.status}
+                      </span>
+                    </td>
+                    <td className="border p-2">
+                      <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                        t.priority === 'urgent' ? 'bg-red-100 text-red-800' :
+                        t.priority === 'high' ? 'bg-orange-100 text-orange-800' :
+                        t.priority === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {t.priority}
+                      </span>
+                    </td>
+                    <td className="border p-2">
+                      {t.assigned_to
+                        ? users.find((u) => u.user_id === t.assigned_to)?.full_name || "Unknown"
+                        : "Unassigned"}
+                    </td>
+                    <td className="border p-2">
+                      {t.created_at ? new Date(t.created_at).toLocaleString() : "—"}
+                    </td>
+                    <td className="border p-2 space-x-2">
+                      <button onClick={() => handleEdit(t)} className="bg-yellow-400 px-2 py-1 rounded hover:bg-yellow-500">
+                        Edit
+                      </button>
+                      <button onClick={() => handleDelete(t.ticket_id)} className="bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600">
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Ticket Form - Now at Bottom */}
+      <form onSubmit={handleSubmit} className="p-4 border rounded shadow space-y-2 bg-white">
         <h2 className="text-xl font-semibold">
           {editingTicketId ? "Edit Ticket" : "Add Ticket"}
         </h2>
@@ -192,7 +362,7 @@ const TicketsManager = () => {
           rows="3"
         />
 
-        {/* ✅ Response Field */}
+        {/* Response Field */}
         <textarea
           name="response_text"
           value={formData.response_text}
@@ -231,67 +401,6 @@ const TicketsManager = () => {
           )}
         </div>
       </form>
-
-      {/* ✅ Tickets Table */}
-      <div className="overflow-x-auto bg-white rounded shadow">
-        <table className="table-auto w-full border-collapse border">
-          <thead className="bg-gray-100">
-            <tr>
-              <th className="border p-2">Ticket No</th>
-              <th className="border p-2">Customer</th>
-              <th className="border p-2">Product</th>
-              <th className="border p-2">Sale</th>
-              <th className="border p-2">Issue</th>
-              <th className="border p-2">Response</th>
-              <th className="border p-2">Status</th>
-              <th className="border p-2">Priority</th>
-              <th className="border p-2">Assigned To</th>
-              <th className="border p-2">Created</th>
-              <th className="border p-2">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {tickets.length === 0 ? (
-              <tr>
-                <td colSpan="11" className="text-center text-gray-500 p-4">
-                  No tickets yet.
-                </td>
-              </tr>
-            ) : (
-              tickets.map((t) => (
-                <tr key={t.ticket_id}>
-                  <td className="border p-2">{t.ticket_no}</td>
-                  <td className="border p-2">{t.customer_name || t.customer_id}</td>
-                  <td className="border p-2">{t.product_name || t.product_id}</td>
-                  <td className="border p-2">{t.bill_no || t.sale_id}</td>
-                  <td className="border p-2">{t.issue_title}</td>
-                  <td className="border p-2 text-gray-700">
-                    {t.response_text || <span className="italic text-gray-400">—</span>}
-                  </td>
-                  <td className="border p-2">{t.status}</td>
-                  <td className="border p-2">{t.priority}</td>
-                  <td className="border p-2">
-                    {t.assigned_to
-                      ? users.find((u) => u.user_id === t.assigned_to)?.full_name || "Unknown"
-                      : "Unassigned"}
-                  </td>
-                  <td className="border p-2">
-                    {t.created_at ? new Date(t.created_at).toLocaleString() : "—"}
-                  </td>
-                  <td className="border p-2 space-x-2">
-                    <button onClick={() => handleEdit(t)} className="bg-yellow-400 px-2 py-1 rounded hover:bg-yellow-500">
-                      Edit
-                    </button>
-                    <button onClick={() => handleDelete(t.ticket_id)} className="bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600">
-                      Delete
-                    </button>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
     </div>
   );
 };

@@ -42,6 +42,6 @@ export const updateUser = async (id, userData) => {
 
 // Delete user
 export const deleteUser = async (id) => {
-  const result = await pool.query("DELETE FROM users WHERE id=$1", [id]);
+  const result = await pool.query("DELETE FROM users WHERE user_id=$1", [id]);
   return result.rowCount;
 };
